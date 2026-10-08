@@ -926,6 +926,80 @@ func (s *SynchronizationController) cancelRemoteMigration(migrationUID types.UID
 	return nil
 }
 
+// syncSourceStateDirect is the same-cluster fast path for handleSourceState.
+// Instead of dialling ourselves over gRPC (which produces a reflexive loop),
+// we serialise the source VMI status and call SyncSourceMigrationStatus directly
+// in-process, exactly as the remote target would via the network path.
+func (s *SynchronizationController) syncSourceStateDirect(ctx context.Context, vmi *virtv1.VirtualMachineInstance, migration *virtv1.VirtualMachineInstanceMigration) error {
+	migrationID, err := s.resolveSourceOutboundMigrationID(vmi.Status.MigrationState)
+	if err != nil {
+		return err
+	}
+	if migrationID == "" {
+		return nil
+	}
+
+	statusToSend := vmi.Status.DeepCopy()
+	// Mirror the tunnel-address rewrite that the network path applies.
+	if s.IsTunnelInitialized() && statusToSend.MigrationState != nil && statusToSend.MigrationState.SourceState != nil {
+		sourceSyncAddress, err := s.getLocalSynchronizationAddress()
+		if err != nil {
+			return fmt.Errorf("failed to get local synchronization address: %w", err)
+		}
+		statusToSend.MigrationState.SourceState.SyncAddress = &sourceSyncAddress
+	}
+
+	vmiStatusJson, err := json.Marshal(statusToSend)
+	if err != nil {
+		return err
+	}
+
+	log.Log.Object(vmi).V(4).Infof("in-process SyncSourceMigrationStatus for migrationID %s", migrationID)
+	if _, err := s.SyncSourceMigrationStatus(ctx, &syncv1.VMIStatusRequest{
+		MigrationID: migrationID,
+		VmiStatus:   &syncv1.VMIStatus{VmiStatusJson: vmiStatusJson},
+	}); err != nil {
+		return err
+	}
+	return nil
+}
+
+// syncTargetStateDirect is the same-cluster fast path for handleTargetState.
+// Same reasoning as syncSourceStateDirect — avoids a reflexive gRPC self-dial.
+func (s *SynchronizationController) syncTargetStateDirect(ctx context.Context, vmi *virtv1.VirtualMachineInstance, migration *virtv1.VirtualMachineInstanceMigration) error {
+	if vmi.Status.MigrationState == nil || vmi.Status.MigrationState.TargetState == nil {
+		return nil
+	}
+	migrationUID := vmi.Status.MigrationState.TargetState.MigrationUID
+	migrationID, err := s.getMigrationIDFromUID(migrationUID)
+	if err != nil {
+		return err
+	}
+	if migrationID == "" {
+		return nil
+	}
+
+	statusToSend := vmi.Status.DeepCopy()
+	// Mirror the proxy setup that the network path applies for outbound target connections.
+	if err := s.setupTargetProxiesForOutbound(migration, vmi); err != nil {
+		return err
+	}
+
+	vmiStatusJson, err := json.Marshal(statusToSend)
+	if err != nil {
+		return err
+	}
+
+	log.Log.Object(vmi).V(4).Infof("in-process SyncTargetMigrationStatus for migrationID %s", migrationID)
+	if _, err := s.SyncTargetMigrationStatus(ctx, &syncv1.VMIStatusRequest{
+		MigrationID: migrationID,
+		VmiStatus:   &syncv1.VMIStatus{VmiStatusJson: vmiStatusJson},
+	}); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (s *SynchronizationController) getMigrationIDFromUID(migrationUID types.UID) (string, error) {
 	objs, err := s.migrationInformer.GetIndexer().ByIndex(controller.ByMigrationUIDIndex, string(migrationUID))
 	if err != nil {
@@ -1093,8 +1167,18 @@ func (s *SynchronizationController) handleSourceState(ctx context.Context, vmi *
 	targetState := vmi.Status.MigrationState.TargetState
 
 	if targetState != nil && targetState.SyncAddress != nil && sourceState.MigrationUID != "" {
-		if outboundConnection, err = s.getOutboundSourceConnection(vmi, vmi.Status.MigrationState); err != nil {
-			return err
+		// Same-cluster fast path: if the target's sync address is our own address,
+		// skip the gRPC dial and call the handler directly in-process. This avoids
+		// a reflexive loop where both sides dial themselves on single-cluster DLM.
+		if *targetState.SyncAddress == syncAddress {
+			log.Log.Object(vmi).V(4).Info("target sync address matches local address, using in-process fast path for source state")
+			if err := s.syncSourceStateDirect(ctx, vmi, migration); err != nil {
+				return err
+			}
+		} else {
+			if outboundConnection, err = s.getOutboundSourceConnection(vmi, vmi.Status.MigrationState); err != nil {
+				return err
+			}
 		}
 	}
 	if outboundConnection == nil {
@@ -1193,8 +1277,17 @@ func (s *SynchronizationController) handleTargetState(ctx context.Context, vmi *
 
 	// Only attempt outbound connection if SourceState exists
 	if sourceState != nil && sourceState.SyncAddress != nil && targetState.MigrationUID != "" {
-		if outboundConnection, err = s.getOutboundTargetConnection(vmi, vmi.Status.MigrationState); err != nil {
-			return err
+		// Same-cluster fast path: if the source's sync address is our own address,
+		// skip the gRPC dial and call the handler directly in-process.
+		if *sourceState.SyncAddress == syncAddress {
+			log.Log.Object(vmi).V(4).Info("source sync address matches local address, using in-process fast path for target state")
+			if err := s.syncTargetStateDirect(ctx, vmi, migration); err != nil {
+				return err
+			}
+		} else {
+			if outboundConnection, err = s.getOutboundTargetConnection(vmi, vmi.Status.MigrationState); err != nil {
+				return err
+			}
 		}
 	}
 	if outboundConnection == nil {
@@ -1712,10 +1805,16 @@ func (s *SynchronizationController) SyncTargetMigrationStatus(ctx context.Contex
 func (s *SynchronizationController) patchVMIConditions(ctx context.Context, origVMI, newVMI *virtv1.VirtualMachineInstance) error {
 	patchSet := patch.New()
 	if !apiequality.Semantic.DeepEqual(origVMI.Status.Conditions, newVMI.Status.Conditions) {
-		patchSet.AddOption(
-			patch.WithTest("/status/conditions", origVMI.Status.Conditions),
-			patch.WithReplace("/status/conditions", newVMI.Status.Conditions),
-		)
+		// Use replace without a test precondition. The DLM failure condition is
+		// exclusively owned by the sync controller; using test+replace causes
+		// spurious HTTP 422 failures when the informer cache is momentarily stale
+		// (another controller — e.g. virt-controller — has updated conditions
+		// since the cache was populated). A plain replace is safe and idempotent.
+		if origVMI.Status.Conditions == nil {
+			patchSet.AddOption(patch.WithAdd("/status/conditions", newVMI.Status.Conditions))
+		} else {
+			patchSet.AddOption(patch.WithReplace("/status/conditions", newVMI.Status.Conditions))
+		}
 	}
 	if !patchSet.IsEmpty() {
 		patchBytes, err := patchSet.GeneratePayload()

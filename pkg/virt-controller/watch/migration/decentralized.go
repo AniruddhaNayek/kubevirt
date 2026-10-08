@@ -138,7 +138,9 @@ func (c *Controller) updateVMIMigrationSourceWithPodInfo(migration *v1.VirtualMa
 	vmiCopy.Status.MigrationState.MigrationUID = migration.UID
 	vmiCopy.Status.MigrationState.SourceState.Node = vmi.Status.NodeName
 	vmiCopy.Status.MigrationState.SourceState.Pod = migration.Status.MigrationState.SourcePod
-	vmiCopy.Status.MigrationState.SourceState.PersistentStatePVCName = &migration.Status.MigrationState.SourcePersistentStatePVCName
+	if migration.Status.MigrationState.SourcePersistentStatePVCName != "" {
+		vmiCopy.Status.MigrationState.SourceState.PersistentStatePVCName = &migration.Status.MigrationState.SourcePersistentStatePVCName
+	}
 	vmiCopy.Status.MigrationState.SourceState.SelinuxContext = vmi.Status.SelinuxContext
 	nodeSelectors, err := c.getNodeSelectorsFromNodeName(vmi.Status.NodeName)
 	if err != nil {
