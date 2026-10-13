@@ -336,13 +336,15 @@ func (c *Controller) patchVMI(origVMI, newVMI *virtv1.VirtualMachineInstance) er
 	if !equality.Semantic.DeepEqual(origVMI.Status.MigrationState, newVMI.Status.MigrationState) {
 		if origVMI.Status.MigrationState == nil {
 			patchSet.AddOption(
-				patch.WithTest("/status/migrationState", origVMI.Status.MigrationState),
 				patch.WithAdd("/status/migrationState", newVMI.Status.MigrationState))
 		} else {
-			patchSet.AddOption(
-				patch.WithTest("/status/migrationState", origVMI.Status.MigrationState),
-				patch.WithReplace("/status/migrationState", newVMI.Status.MigrationState),
-			)
+			// Use per-field patches instead of a single whole-object test+replace.
+			// The sync controller concurrently writes MigrationState fields (e.g.
+			// sourceState.syncAddress) while virt-controller writes others (e.g.
+			// sourceState.nodeSelectors). A whole-object test+replace causes HTTP 422
+			// rejections whenever either controller races the other, permanently
+			// blocking nodeSelectors from being written and stalling DLM at Scheduling.
+			addMigrationStateFieldPatches(patchSet, origVMI.Status.MigrationState, newVMI.Status.MigrationState)
 		}
 	}
 
@@ -364,6 +366,110 @@ func (c *Controller) patchVMI(origVMI, newVMI *virtv1.VirtualMachineInstance) er
 		}
 	}
 	return nil
+}
+
+// addMigrationStateFieldPatches generates per-field JSON Patch operations for
+// MigrationState instead of a single whole-object test+replace. This prevents
+// HTTP 422 rejections when the sync controller and virt-controller concurrently
+// write different fields of the same MigrationState object.
+func addMigrationStateFieldPatches(patchSet *patch.PatchSet, origMS, newMS *virtv1.VirtualMachineInstanceMigrationState) {
+	if newMS == nil {
+		patchSet.AddOption(
+			patch.WithTest("/status/migrationState", origMS),
+			patch.WithRemove("/status/migrationState"),
+		)
+		return
+	}
+	patchMigrationStateField(patchSet, "startTimestamp", origMS.StartTimestamp, newMS.StartTimestamp)
+	patchMigrationStateField(patchSet, "endTimestamp", origMS.EndTimestamp, newMS.EndTimestamp)
+	patchMigrationStateField(patchSet, "targetNodeDomainReadyTimestamp", origMS.TargetNodeDomainReadyTimestamp, newMS.TargetNodeDomainReadyTimestamp)
+	patchMigrationStateField(patchSet, "targetNodeDomainDetected", origMS.TargetNodeDomainDetected, newMS.TargetNodeDomainDetected)
+	patchMigrationStateField(patchSet, "targetNodeAddress", origMS.TargetNodeAddress, newMS.TargetNodeAddress)
+	patchMigrationStateField(patchSet, "targetDirectMigrationNodePorts", origMS.TargetDirectMigrationNodePorts, newMS.TargetDirectMigrationNodePorts)
+	patchMigrationStateField(patchSet, "targetNode", origMS.TargetNode, newMS.TargetNode)
+	patchMigrationStateField(patchSet, "targetPod", origMS.TargetPod, newMS.TargetPod)
+	patchMigrationStateField(patchSet, "targetAttachmentPodUID", origMS.TargetAttachmentPodUID, newMS.TargetAttachmentPodUID)
+	patchMigrationStateField(patchSet, "sourceNode", origMS.SourceNode, newMS.SourceNode)
+	patchMigrationStateField(patchSet, "sourcePod", origMS.SourcePod, newMS.SourcePod)
+	patchMigrationStateField(patchSet, "completed", origMS.Completed, newMS.Completed)
+	patchMigrationStateField(patchSet, "failed", origMS.Failed, newMS.Failed)
+	patchMigrationStateField(patchSet, "abortRequested", origMS.AbortRequested, newMS.AbortRequested)
+	patchMigrationStateField(patchSet, "abortStatus", origMS.AbortStatus, newMS.AbortStatus)
+	patchMigrationStateField(patchSet, "failureReason", origMS.FailureReason, newMS.FailureReason)
+	patchMigrationStateField(patchSet, "migrationUid", origMS.MigrationUID, newMS.MigrationUID)
+	patchMigrationStateField(patchSet, "mode", origMS.Mode, newMS.Mode)
+	patchMigrationStateField(patchSet, "migrationPolicyName", origMS.MigrationPolicyName, newMS.MigrationPolicyName)
+	patchMigrationStateField(patchSet, "migrationConfiguration", origMS.VMIMConfigurationOptions, newMS.VMIMConfigurationOptions)
+	patchMigrationStateField(patchSet, "targetCPUSet", origMS.TargetCPUSet, newMS.TargetCPUSet)
+	patchMigrationStateField(patchSet, "targetNodeTopology", origMS.TargetNodeTopology, newMS.TargetNodeTopology)
+	patchMigrationStateField(patchSet, "sourcePersistentStatePVCName", origMS.SourcePersistentStatePVCName, newMS.SourcePersistentStatePVCName)
+	patchMigrationStateField(patchSet, "targetPersistentStatePVCName", origMS.TargetPersistentStatePVCName, newMS.TargetPersistentStatePVCName)
+	patchSourceStateFields(patchSet, origMS.SourceState, newMS.SourceState)
+	patchTargetStateFields(patchSet, origMS.TargetState, newMS.TargetState)
+	patchMigrationStateField(patchSet, "migrationNetworkType", origMS.MigrationNetworkType, newMS.MigrationNetworkType)
+	patchMigrationStateField(patchSet, "targetMemoryOverhead", origMS.TargetMemoryOverhead, newMS.TargetMemoryOverhead)
+}
+
+func patchSourceStateFields(patchSet *patch.PatchSet, orig, new *virtv1.VirtualMachineInstanceMigrationSourceState) {
+	if equality.Semantic.DeepEqual(orig, new) {
+		return
+	}
+	if orig == nil {
+		patchSet.AddOption(patch.WithAdd("/status/migrationState/sourceState", new))
+		return
+	}
+	patchMigrationStateField(patchSet, "sourceState/node", orig.Node, new.Node)
+	patchMigrationStateField(patchSet, "sourceState/pod", orig.Pod, new.Pod)
+	patchMigrationStateField(patchSet, "sourceState/migrationUID", orig.MigrationUID, new.MigrationUID)
+	patchMigrationStateField(patchSet, "sourceState/domainName", orig.DomainName, new.DomainName)
+	patchMigrationStateField(patchSet, "sourceState/domainNamespace", orig.DomainNamespace, new.DomainNamespace)
+	patchMigrationStateField(patchSet, "sourceState/syncAddress", orig.SyncAddress, new.SyncAddress)
+	patchMigrationStateField(patchSet, "sourceState/persistentStatePVCName", orig.PersistentStatePVCName, new.PersistentStatePVCName)
+	patchMigrationStateField(patchSet, "sourceState/selinuxContext", orig.SelinuxContext, new.SelinuxContext)
+	patchMigrationStateField(patchSet, "sourceState/virtualMachineInstanceUID", orig.VirtualMachineInstanceUID, new.VirtualMachineInstanceUID)
+	patchMigrationStateField(patchSet, "sourceState/nodeSelectors", orig.NodeSelectors, new.NodeSelectors)
+}
+
+func patchTargetStateFields(patchSet *patch.PatchSet, orig, new *virtv1.VirtualMachineInstanceMigrationTargetState) {
+	if equality.Semantic.DeepEqual(orig, new) {
+		return
+	}
+	if orig == nil {
+		patchSet.AddOption(patch.WithAdd("/status/migrationState/targetState", new))
+		return
+	}
+	patchMigrationStateField(patchSet, "targetState/node", orig.Node, new.Node)
+	patchMigrationStateField(patchSet, "targetState/pod", orig.Pod, new.Pod)
+	patchMigrationStateField(patchSet, "targetState/migrationUID", orig.MigrationUID, new.MigrationUID)
+	patchMigrationStateField(patchSet, "targetState/domainName", orig.DomainName, new.DomainName)
+	patchMigrationStateField(patchSet, "targetState/domainNamespace", orig.DomainNamespace, new.DomainNamespace)
+	patchMigrationStateField(patchSet, "targetState/syncAddress", orig.SyncAddress, new.SyncAddress)
+	patchMigrationStateField(patchSet, "targetState/persistentStatePVCName", orig.PersistentStatePVCName, new.PersistentStatePVCName)
+	patchMigrationStateField(patchSet, "targetState/selinuxContext", orig.SelinuxContext, new.SelinuxContext)
+	patchMigrationStateField(patchSet, "targetState/virtualMachineInstanceUID", orig.VirtualMachineInstanceUID, new.VirtualMachineInstanceUID)
+	patchMigrationStateField(patchSet, "targetState/domainReadyTimestamp", orig.DomainReadyTimestamp, new.DomainReadyTimestamp)
+	patchMigrationStateField(patchSet, "targetState/domainDetected", orig.DomainDetected, new.DomainDetected)
+	patchMigrationStateField(patchSet, "targetState/nodeAddress", orig.NodeAddress, new.NodeAddress)
+	patchMigrationStateField(patchSet, "targetState/directMigrationNodePorts", orig.DirectMigrationNodePorts, new.DirectMigrationNodePorts)
+	patchMigrationStateField(patchSet, "targetState/attachmentPodUID", orig.AttachmentPodUID, new.AttachmentPodUID)
+	patchMigrationStateField(patchSet, "targetState/cpuSet", orig.CPUSet, new.CPUSet)
+	patchMigrationStateField(patchSet, "targetState/nodeTopology", orig.NodeTopology, new.NodeTopology)
+}
+
+func patchMigrationStateField[T any](patchSet *patch.PatchSet, field string, orig, new T) {
+	if equality.Semantic.DeepEqual(orig, new) {
+		return
+	}
+	path := "/status/migrationState/" + field
+	var zero T
+	if equality.Semantic.DeepEqual(orig, zero) {
+		patchSet.AddOption(patch.WithAdd(path, new))
+	} else {
+		patchSet.AddOption(
+			patch.WithTest(path, orig),
+			patch.WithReplace(path, new),
+		)
+	}
 }
 
 func (c *Controller) execute(key string) error {
