@@ -1168,17 +1168,24 @@ func (s *SynchronizationController) handleSourceState(ctx context.Context, vmi *
 
 	if targetState != nil && targetState.SyncAddress != nil && sourceState.MigrationUID != "" {
 		// Same-cluster fast path: if the target's sync address is our own address,
-		// skip the gRPC dial and call the handler directly in-process. This avoids
-		// a reflexive loop where both sides dial themselves on single-cluster DLM.
+		// skip the gRPC dial and call SyncSourceMigrationStatus directly in-process.
+		// This avoids a reflexive gRPC self-dial loop on single-cluster DLM.
+		// After the in-process call succeeds, patch the VMI with the updated syncAddress
+		// (mirrors what the gRPC path does at the bottom of this function) and return.
 		if *targetState.SyncAddress == syncAddress {
 			log.Log.Object(vmi).V(4).Info("target sync address matches local address, using in-process fast path for source state")
 			if err := s.syncSourceStateDirect(ctx, vmi, migration); err != nil {
 				return err
 			}
-		} else {
-			if outboundConnection, err = s.getOutboundSourceConnection(vmi, vmi.Status.MigrationState); err != nil {
-				return err
+			if syncAddressChanged {
+				if err := s.patchVMI(ctx, origVMI, vmi); err != nil {
+					return fmt.Errorf("failed to patch VMI with source sync address after direct call: %v", err)
+				}
 			}
+			return nil
+		}
+		if outboundConnection, err = s.getOutboundSourceConnection(vmi, vmi.Status.MigrationState); err != nil {
+			return err
 		}
 	}
 	if outboundConnection == nil {
@@ -1278,16 +1285,23 @@ func (s *SynchronizationController) handleTargetState(ctx context.Context, vmi *
 	// Only attempt outbound connection if SourceState exists
 	if sourceState != nil && sourceState.SyncAddress != nil && targetState.MigrationUID != "" {
 		// Same-cluster fast path: if the source's sync address is our own address,
-		// skip the gRPC dial and call the handler directly in-process.
+		// skip the gRPC dial and call SyncTargetMigrationStatus directly in-process.
+		// After the in-process call succeeds, patch the VMI with the updated syncAddress
+		// (mirrors what the gRPC path does at the bottom of this function) and return.
 		if *sourceState.SyncAddress == syncAddress {
 			log.Log.Object(vmi).V(4).Info("source sync address matches local address, using in-process fast path for target state")
 			if err := s.syncTargetStateDirect(ctx, vmi, migration); err != nil {
 				return err
 			}
-		} else {
-			if outboundConnection, err = s.getOutboundTargetConnection(vmi, vmi.Status.MigrationState); err != nil {
-				return err
+			if syncAddressChanged {
+				if err := s.patchVMI(ctx, origVMI, vmi); err != nil {
+					return fmt.Errorf("failed to patch VMI with target sync address after direct call: %v", err)
+				}
 			}
+			return nil
+		}
+		if outboundConnection, err = s.getOutboundTargetConnection(vmi, vmi.Status.MigrationState); err != nil {
+			return err
 		}
 	}
 	if outboundConnection == nil {
