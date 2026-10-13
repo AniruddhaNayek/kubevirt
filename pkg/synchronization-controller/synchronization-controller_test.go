@@ -463,7 +463,7 @@ var _ = Describe("VMI status synchronization controller", func() {
 			Expect(string(payload)).ToNot(ContainSubstring(`"op":"test"`))
 		})
 
-		It("should generate test+replace operations for fields changing from non-zero to non-zero", func() {
+		It("should generate plain replace (no test precondition) for fields changing from non-zero to non-zero", func() {
 			origMS := &virtv1.VirtualMachineInstanceMigrationState{
 				TargetNode: "old-node",
 			}
@@ -475,8 +475,10 @@ var _ = Describe("VMI status synchronization controller", func() {
 			payload, err := patchSet.GeneratePayload()
 			Expect(err).ToNot(HaveOccurred())
 
-			Expect(string(payload)).To(ContainSubstring(`"op":"test"`))
-			Expect(string(payload)).To(ContainSubstring(`"old-node"`))
+			// No test precondition — concurrent writes from the other controller
+			// must not cause HTTP 422 due to a stale cache value.
+			Expect(string(payload)).ToNot(ContainSubstring(`"op":"test"`))
+			Expect(string(payload)).ToNot(ContainSubstring(`"old-node"`))
 			Expect(string(payload)).To(ContainSubstring(`"op":"replace"`))
 			Expect(string(payload)).To(ContainSubstring(`"new-node"`))
 		})
