@@ -463,12 +463,16 @@ func patchMigrationStateField[T any](patchSet *patch.PatchSet, field string, ori
 	path := "/status/migrationState/" + field
 	var zero T
 	if equality.Semantic.DeepEqual(orig, zero) {
+		// Field was absent (omitempty zero) — use add.
 		patchSet.AddOption(patch.WithAdd(path, new))
 	} else {
-		patchSet.AddOption(
-			patch.WithTest(path, orig),
-			patch.WithReplace(path, new),
-		)
+		// Do NOT use test+replace here. The sync controller and virt-controller
+		// concurrently modify different sub-fields of MigrationState. A test
+		// precondition on the stale cache value causes HTTP 422 failures whenever
+		// either controller has already updated the field since our informer
+		// snapshot. Plain replace is safe: the field already exists (orig ≠ zero),
+		// and we are only changing its value — no structural conflict possible.
+		patchSet.AddOption(patch.WithReplace(path, new))
 	}
 }
 

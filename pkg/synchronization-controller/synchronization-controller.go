@@ -1998,11 +1998,23 @@ func patchTargetStateFields(patchSet *patch.PatchSet, orig, new *virtv1.VirtualM
 	patchMigrationStateField(patchSet, "targetState/nodeTopology", orig.NodeTopology, new.NodeTopology)
 }
 
-// patchMigrationStateField generates an add or test+replace JSON
-// Patch operation for a single MigrationState field (all of which are
-// omitempty). Unchanged fields are skipped. Zero originals use add
-// (field absent from JSON), non-zero use test+replace for conflict
-// detection.
+// patchMigrationStateField generates an add or replace JSON Patch operation
+// for a single MigrationState field (all omitempty). Unchanged fields are
+// skipped. Zero originals (field absent from JSON) use add; non-zero originals
+// use plain replace — no test precondition.
+//
+// We intentionally drop the test+replace pattern here: virt-controller and the
+// sync controller both write sub-fields of MigrationState concurrently. A test
+// on the stale cache value of any individual field causes spurious HTTP 422
+// failures whenever the other controller has already advanced that field since
+// our informer snapshot. Plain replace is safe because the field already exists
+// (orig ≠ zero) and we are only updating its value, not adding or removing
+// the parent object.
+//
+// This fix applies equally on all architectures (x86, ppc64le, s390x, arm64).
+// On x86 the race is less likely to manifest because informer cache staleness
+// windows are shorter, but the logic is the same: a test precondition on a
+// concurrently-owned field is never safe.
 func patchMigrationStateField[T any](patchSet *patch.PatchSet, field string, orig, new T) {
 	if apiequality.Semantic.DeepEqual(orig, new) {
 		return
@@ -2010,12 +2022,11 @@ func patchMigrationStateField[T any](patchSet *patch.PatchSet, field string, ori
 	path := "/status/migrationState/" + field
 	var zero T
 	if apiequality.Semantic.DeepEqual(orig, zero) {
+		// Field was absent (omitempty zero) — use add.
 		patchSet.AddOption(patch.WithAdd(path, new))
 	} else {
-		patchSet.AddOption(
-			patch.WithTest(path, orig),
-			patch.WithReplace(path, new),
-		)
+		// Field already exists — plain replace, no test precondition.
+		patchSet.AddOption(patch.WithReplace(path, new))
 	}
 }
 
