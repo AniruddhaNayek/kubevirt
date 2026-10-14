@@ -4186,10 +4186,10 @@ rpm(
 )
 
 rpm(
-    name = "glibc-0__2.39-130.el10.ppc64le",
-    sha256 = "18ad3812008f5568390fe08be27ddaf96956a274ff158532ca10e1a81d1d92fa",
+    name = "glibc-0__2.39-137.el10.ppc64le",
+    sha256 = "29e4d603dd557c9bfc05803f2f5600496dd09b856ff4aee728b49212e11b1cca",
     urls = [
-        "https://mirror.stream.centos.org/10-stream/BaseOS/ppc64le/os/Packages/glibc-2.39-130.el10.ppc64le.rpm",
+        "https://mirror.stream.centos.org/10-stream/BaseOS/ppc64le/os/Packages/glibc-2.39-137.el10.ppc64le.rpm",
     ],
 )
 
@@ -4380,42 +4380,42 @@ rpm(
 )
 
 rpm(
-    name = "glibc-langpack-hsb-0__2.39-130.el10.ppc64le",
-    sha256 = "8366146cd135d7a7f326246563e2f2e1f2b476ce4685eb3da2aad7dca72aa0fe",
+    name = "glibc-langpack-hsb-0__2.39-137.el10.ppc64le",
+    sha256 = "c56fe8c9c1df9f51d33c29aaa2d09d76d6c37d6f616c040f4166c0e896573e68",
     urls = [
-        "https://mirror.stream.centos.org/10-stream/BaseOS/ppc64le/os/Packages/glibc-langpack-hsb-2.39-130.el10.ppc64le.rpm",
+        "https://mirror.stream.centos.org/10-stream/BaseOS/ppc64le/os/Packages/glibc-langpack-hsb-2.39-137.el10.ppc64le.rpm",
     ],
 )
 
 rpm(
-    name = "glibc-langpack-ja-0__2.39-130.el10.ppc64le",
-    sha256 = "69b09f8bf98fcbd72706524c4b2754a20d39585566f0ff66740d5d2c0039e925",
+    name = "glibc-langpack-ja-0__2.39-137.el10.ppc64le",
+    sha256 = "ddb7f2215a2a526441901445222b977300a943738f8888d3b28c0c486ec43b82",
     urls = [
-        "https://mirror.stream.centos.org/10-stream/BaseOS/ppc64le/os/Packages/glibc-langpack-ja-2.39-130.el10.ppc64le.rpm",
+        "https://mirror.stream.centos.org/10-stream/BaseOS/ppc64le/os/Packages/glibc-langpack-ja-2.39-137.el10.ppc64le.rpm",
     ],
 )
 
 rpm(
-    name = "glibc-langpack-ka-0__2.39-130.el10.ppc64le",
-    sha256 = "4650b4fceb24eeac4b19ddde0404b5f75c6487207514b14d85f849b04c575906",
+    name = "glibc-langpack-ka-0__2.39-137.el10.ppc64le",
+    sha256 = "c7aae5176611e0faa9ab6ae954cb8d9db341cfee89dcba4a495338de35634938",
     urls = [
-        "https://mirror.stream.centos.org/10-stream/BaseOS/ppc64le/os/Packages/glibc-langpack-ka-2.39-130.el10.ppc64le.rpm",
+        "https://mirror.stream.centos.org/10-stream/BaseOS/ppc64le/os/Packages/glibc-langpack-ka-2.39-137.el10.ppc64le.rpm",
     ],
 )
 
 rpm(
-    name = "glibc-langpack-mk-0__2.39-130.el10.ppc64le",
-    sha256 = "56d472f9f09a8f16d84fd12e2976a5617dd2d73b8433caf312759b6e642787f2",
+    name = "glibc-langpack-mk-0__2.39-137.el10.ppc64le",
+    sha256 = "08f5c83196cf99ea7f022386408d4b993ba20034f1d7231915b1263d9a5c6302",
     urls = [
-        "https://mirror.stream.centos.org/10-stream/BaseOS/ppc64le/os/Packages/glibc-langpack-mk-2.39-130.el10.ppc64le.rpm",
+        "https://mirror.stream.centos.org/10-stream/BaseOS/ppc64le/os/Packages/glibc-langpack-mk-2.39-137.el10.ppc64le.rpm",
     ],
 )
 
 rpm(
-    name = "glibc-langpack-mt-0__2.39-130.el10.ppc64le",
-    sha256 = "dbebd5c75e0adc2b069b530767c94573ff6b1dbf8fd99b762f01b7fe54b63a5b",
+    name = "glibc-langpack-mt-0__2.39-137.el10.ppc64le",
+    sha256 = "fc40970cab6ec18dda2659716426265d79a1d31a6fad1e754805fcbd496cedf4",
     urls = [
-        "https://mirror.stream.centos.org/10-stream/BaseOS/ppc64le/os/Packages/glibc-langpack-mt-2.39-130.el10.ppc64le.rpm",
+        "https://mirror.stream.centos.org/10-stream/BaseOS/ppc64le/os/Packages/glibc-langpack-mt-2.39-137.el10.ppc64le.rpm",
     ],
 )
 
@@ -4534,10 +4534,10 @@ rpm(
 )
 
 rpm(
-    name = "glibc-static-0__2.39-130.el10.ppc64le",
-    sha256 = "1f7b486f8ffa1487fd0f9291f0c0969d7600c4062dd754a89575fffdd566bb69",
+    name = "glibc-static-0__2.39-137.el10.ppc64le",
+    sha256 = "499a07b4dcfe2b884678e0af2803dff9414018b867a28d0d886808c6e11166d8",
     urls = [
-        "https://mirror.stream.centos.org/10-stream/CRB/ppc64le/os/Packages/glibc-static-2.39-130.el10.ppc64le.rpm",
+        "https://mirror.stream.centos.org/10-stream/CRB/ppc64le/os/Packages/glibc-static-2.39-137.el10.ppc64le.rpm",
     ],
 )
 
@@ -5740,10 +5740,10 @@ rpm(
 )
 
 rpm(
-    name = "kernel-headers-0__6.12.0-250.el10.ppc64le",
-    sha256 = "b6ee7d292450217f5dedd33bff3561837ec2dbc9b646fb1c2ecfdc107bad4721",
+    name = "kernel-headers-0__6.12.0-271.el10.ppc64le",
+    sha256 = "bca7db3b311a6a626c7cd49448afba875a834f5db6f7e653db7512478089f720",
     urls = [
-        "https://mirror.stream.centos.org/10-stream/AppStream/ppc64le/os/Packages/kernel-headers-6.12.0-250.el10.ppc64le.rpm",
+        "https://mirror.stream.centos.org/10-stream/AppStream/ppc64le/os/Packages/kernel-headers-6.12.0-271.el10.ppc64le.rpm",
     ],
 )
 
@@ -18044,20 +18044,18 @@ rpm(
 )
 
 rpm(
-    name = "glibc-langpack-ak-0__2.39-130.el10.ppc64le",
-    sha256 = "07d65e0a325587a0196a99221b8d1eed534fff9e6bbe3ceb0c44c7b937e50192",
+    name = "glibc-langpack-ak-0__2.39-137.el10.ppc64le",
+    sha256 = "5d969e1a8b00a9d711297d324cb1572b02b3a65c5cac1b07d42cc5b91dff3422",
     urls = [
-        "https://mirror.stream.centos.org/10-stream/BaseOS/ppc64le/os/Packages/glibc-langpack-ak-2.39-141.el10.ppc64le.rpm",
-        "https://storage.googleapis.com/builddeps/07d65e0a325587a0196a99221b8d1eed534fff9e6bbe3ceb0c44c7b937e50192",
+        "https://mirror.stream.centos.org/10-stream/BaseOS/ppc64le/os/Packages/glibc-langpack-ak-2.39-137.el10.ppc64le.rpm",
     ],
 )
 
 rpm(
-    name = "glibc-langpack-an-0__2.39-130.el10.ppc64le",
-    sha256 = "74a355157d0596fcd86aeadb88df31bdd1e4822b197a47cf35a42acffd8ac60b",
+    name = "glibc-langpack-an-0__2.39-137.el10.ppc64le",
+    sha256 = "2224cf2d05fa048ff86f2e6a5e71776ca96bbb7560f5c655054aae8acf99a5c4",
     urls = [
-        "https://mirror.stream.centos.org/10-stream/BaseOS/ppc64le/os/Packages/glibc-langpack-an-2.39-141.el10.ppc64le.rpm",
-        "https://storage.googleapis.com/builddeps/74a355157d0596fcd86aeadb88df31bdd1e4822b197a47cf35a42acffd8ac60b",
+        "https://mirror.stream.centos.org/10-stream/BaseOS/ppc64le/os/Packages/glibc-langpack-an-2.39-137.el10.ppc64le.rpm",
     ],
 )
 
@@ -18071,20 +18069,18 @@ rpm(
 )
 
 rpm(
-    name = "glibc-langpack-gd-0__2.39-130.el10.ppc64le",
-    sha256 = "ee43826b3d030a0a91e82f7f6e088fe886006bf776fca535b719e88efebebe49",
+    name = "glibc-langpack-gd-0__2.39-137.el10.ppc64le",
+    sha256 = "181ba6e6cf51a7a56d919f79381d2097ef5e6c6370b2ba6b7952811cddb5d6b9",
     urls = [
-        "https://mirror.stream.centos.org/10-stream/BaseOS/ppc64le/os/Packages/glibc-langpack-gd-2.39-141.el10.ppc64le.rpm",
-        "https://storage.googleapis.com/builddeps/ee43826b3d030a0a91e82f7f6e088fe886006bf776fca535b719e88efebebe49",
+        "https://mirror.stream.centos.org/10-stream/BaseOS/ppc64le/os/Packages/glibc-langpack-gd-2.39-137.el10.ppc64le.rpm",
     ],
 )
 
 rpm(
-    name = "glibc-devel-0__2.39-130.el10.ppc64le",
-    sha256 = "bf32b346327f62dcd045b3367c36d0a632cd25caf5037d07cfae7e158870dc79",
+    name = "glibc-devel-0__2.39-137.el10.ppc64le",
+    sha256 = "ee3dad852e25e6c9ee63f3f9453ae71c85ea7e5817d93d589b505772e702ea05",
     urls = [
-        "https://mirror.stream.centos.org/10-stream/AppStream/ppc64le/os/Packages/glibc-devel-2.39-141.el10.ppc64le.rpm",
-        "https://storage.googleapis.com/builddeps/bf32b346327f62dcd045b3367c36d0a632cd25caf5037d07cfae7e158870dc79",
+        "https://mirror.stream.centos.org/10-stream/AppStream/ppc64le/os/Packages/glibc-devel-2.39-137.el10.ppc64le.rpm",
     ],
 )
 
@@ -18098,29 +18094,26 @@ rpm(
 )
 
 rpm(
-    name = "glibc-minimal-langpack-0__2.39-130.el10.ppc64le",
-    sha256 = "ecbea1a1ecbcb75640cf42685dcd8e7c3c59abe453f89047aaebc894b2a125ab",
+    name = "glibc-minimal-langpack-0__2.39-137.el10.ppc64le",
+    sha256 = "148d89012a75c220674f2ca5ff43cf40eab572139c2ab8d0880ff16259b0979f",
     urls = [
-        "https://mirror.stream.centos.org/10-stream/BaseOS/ppc64le/os/Packages/glibc-minimal-langpack-2.39-141.el10.ppc64le.rpm",
-        "https://storage.googleapis.com/builddeps/ecbea1a1ecbcb75640cf42685dcd8e7c3c59abe453f89047aaebc894b2a125ab",
+        "https://mirror.stream.centos.org/10-stream/BaseOS/ppc64le/os/Packages/glibc-minimal-langpack-2.39-137.el10.ppc64le.rpm",
     ],
 )
 
 rpm(
-    name = "glibc-common-0__2.39-130.el10.ppc64le",
-    sha256 = "8d7659284a239a3ef11cba64920e5b8067169a1b36c289f49c9f3dd19e5c09cd",
+    name = "glibc-common-0__2.39-137.el10.ppc64le",
+    sha256 = "47a7414cf6845dc9afe7f4aa258c14c74126c5a4e3fcd399fb78945600e27b47",
     urls = [
-        "https://mirror.stream.centos.org/10-stream/BaseOS/ppc64le/os/Packages/glibc-common-2.39-141.el10.ppc64le.rpm",
-        "https://storage.googleapis.com/builddeps/8d7659284a239a3ef11cba64920e5b8067169a1b36c289f49c9f3dd19e5c09cd",
+        "https://mirror.stream.centos.org/10-stream/BaseOS/ppc64le/os/Packages/glibc-common-2.39-137.el10.ppc64le.rpm",
     ],
 )
 
 rpm(
-    name = "glibc-langpack-doi-0__2.39-130.el10.ppc64le",
-    sha256 = "449bc52aaf411e0e52b2c96d6394f81030ee996e63f9be7958036357e0b5b354",
+    name = "glibc-langpack-doi-0__2.39-137.el10.ppc64le",
+    sha256 = "462e650fc9661acde87dbd611afb11694ed7d33a536b4800bd492ddefc5fafe0",
     urls = [
-        "https://mirror.stream.centos.org/10-stream/BaseOS/ppc64le/os/Packages/glibc-langpack-doi-2.39-141.el10.ppc64le.rpm",
-        "https://storage.googleapis.com/builddeps/449bc52aaf411e0e52b2c96d6394f81030ee996e63f9be7958036357e0b5b354",
+        "https://mirror.stream.centos.org/10-stream/BaseOS/ppc64le/os/Packages/glibc-langpack-doi-2.39-137.el10.ppc64le.rpm",
     ],
 )
 
