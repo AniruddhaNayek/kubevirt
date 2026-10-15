@@ -1025,6 +1025,26 @@ func (s *SynchronizationController) getMigrationIDFromUID(migrationUID types.UID
 	return migrationID, nil
 }
 
+// isActiveMigrationUID returns (true, nil) when the given UID resolves to a
+// migration that exists in the informer cache AND is not yet in a final state.
+// Returns (false, nil) if the migration no longer exists (deleted/evicted) or
+// is already final — both cases mean the UID is stale and safe to ignore.
+func (s *SynchronizationController) isActiveMigrationUID(migrationUID types.UID) (bool, error) {
+	objs, err := s.migrationInformer.GetIndexer().ByIndex(controller.ByMigrationUIDIndex, string(migrationUID))
+	if err != nil {
+		return false, err
+	}
+	if len(objs) == 0 {
+		// Migration no longer in cache — treat as stale/completed.
+		return false, nil
+	}
+	migration, ok := objs[0].(*virtv1.VirtualMachineInstanceMigration)
+	if !ok {
+		return false, fmt.Errorf("found unknown object in migration cache for UID %s", migrationUID)
+	}
+	return !migration.IsFinal(), nil
+}
+
 func (s *SynchronizationController) getOutboundSourceConnection(vmi *virtv1.VirtualMachineInstance, migrationState *virtv1.VirtualMachineInstanceMigrationState) (*SynchronizationConnection, error) {
 	if migrationState.TargetState == nil || migrationState.TargetState.SyncAddress == nil || *migrationState.TargetState.SyncAddress == "" {
 		return nil, nil
@@ -1616,13 +1636,24 @@ func (s *SynchronizationController) SyncSourceMigrationStatus(ctx context.Contex
 		}, nil
 	}
 
-	// Check if the VMI's current migration matches this migration
+	// Check if the VMI's current migration matches this migration.
+	// In DLM same-cluster setups, MigrationUID on the VMI is set independently by
+	// virt-controller (via updateVMIMigrationSourceWithPodInfo / handleTargetPodHandoff)
+	// and may transiently differ from migration.UID due to ordering — e.g. when
+	// findTargetMigrationFromMigrationID resolves to a VMIM whose UID was not yet
+	// written to the VMI. Only reject if the mismatching UID belongs to a *different
+	// active* (non-final) migration; a stale/final UID from a previous run is safe
+	// to overwrite.
 	if newVMI.Status.MigrationState.MigrationUID != "" && newVMI.Status.MigrationState.MigrationUID != migration.UID {
-		log.Log.Object(migration).Warningf("VMI %s/%s has different migration UID %s, ignoring source state update for migration %s",
+		if conflict, _ := s.isActiveMigrationUID(newVMI.Status.MigrationState.MigrationUID); conflict {
+			log.Log.Object(migration).Warningf("VMI %s/%s has different active migration UID %s, ignoring source state update for migration %s",
+				vmi.Namespace, vmi.Name, newVMI.Status.MigrationState.MigrationUID, migration.UID)
+			return &syncv1.VMIStatusResponse{
+				Message: successMessage,
+			}, nil
+		}
+		log.Log.Object(migration).V(4).Infof("VMI %s/%s has stale migration UID %s (not active), proceeding with source state update for migration %s",
 			vmi.Namespace, vmi.Name, newVMI.Status.MigrationState.MigrationUID, migration.UID)
-		return &syncv1.VMIStatusResponse{
-			Message: successMessage,
-		}, nil
 	}
 
 	// Bind peer only after the update is accepted, and only when the tunnel proxy is active.
@@ -1776,13 +1807,24 @@ func (s *SynchronizationController) SyncTargetMigrationStatus(ctx context.Contex
 		}, nil
 	}
 
-	// Check if the VMI's current migration matches this migration
+	// Check if the VMI's current migration matches this migration.
+	// In DLM same-cluster setups, MigrationUID on the VMI is set independently by
+	// virt-controller (via updateVMIMigrationSourceWithPodInfo / handleTargetPodHandoff)
+	// and may transiently differ from migration.UID due to ordering — e.g. when
+	// findSourceMigrationFromMigrationID resolves to a VMIM whose UID was not yet
+	// written to the VMI. Only reject if the mismatching UID belongs to a *different
+	// active* (non-final) migration; a stale/final UID from a previous run is safe
+	// to overwrite.
 	if newVMI.Status.MigrationState.MigrationUID != "" && newVMI.Status.MigrationState.MigrationUID != migration.UID {
-		log.Log.Object(migration).Warningf("VMI %s/%s has different migration UID %s, ignoring target state update for migration %s",
+		if conflict, _ := s.isActiveMigrationUID(newVMI.Status.MigrationState.MigrationUID); conflict {
+			log.Log.Object(migration).Warningf("VMI %s/%s has different active migration UID %s, ignoring target state update for migration %s",
+				vmi.Namespace, vmi.Name, newVMI.Status.MigrationState.MigrationUID, migration.UID)
+			return &syncv1.VMIStatusResponse{
+				Message: successMessage,
+			}, nil
+		}
+		log.Log.Object(migration).V(4).Infof("VMI %s/%s has stale migration UID %s (not active), proceeding with target state update for migration %s",
 			vmi.Namespace, vmi.Name, newVMI.Status.MigrationState.MigrationUID, migration.UID)
-		return &syncv1.VMIStatusResponse{
-			Message: successMessage,
-		}, nil
 	}
 
 	log.Log.Object(newVMI).V(5).Infof("vmi migration target state: %#v", newVMI.Status.MigrationState.TargetState)

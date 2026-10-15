@@ -373,11 +373,14 @@ var _ = Describe("VMI status synchronization controller", func() {
 			Expect(updatedVMI.Status.MigrationState.SourceState).To(BeNil())
 		})
 
-		It("should return success when source VMI migration UID doesn't match without updating VMI", func() {
-			By("Set up VMI with different migration UID")
-			differentMigrationUID := "different-migration-uid"
+		It("should proceed with source state update when VMI has a stale migration UID not present in cache", func() {
+			// DLM same-cluster scenario: MigrationUID was written by a previous run
+			// whose VMIM was already deleted.  The UID is not in the informer cache →
+			// isActiveMigrationUID returns false → update is allowed.
+			By("Set up VMI with a stale migration UID (no matching VMIM in cache)")
+			staleMigrationUID := "stale-migration-uid-not-in-cache"
 			vmi.Status.MigrationState = &virtv1.VirtualMachineInstanceMigrationState{
-				MigrationUID: types.UID(differentMigrationUID),
+				MigrationUID: types.UID(staleMigrationUID),
 			}
 			vmi, err := controller.client.VirtualMachineInstance(vmi.Namespace).Update(context.Background(), vmi, metav1.UpdateOptions{})
 			Expect(err).ToNot(HaveOccurred())
@@ -408,11 +411,72 @@ var _ = Describe("VMI status synchronization controller", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(resp.Message).To(Equal(successMessage))
 
-			By("Verify VMI was not updated (SourceState should still be nil)")
+			By("Verify VMI was updated despite stale UID mismatch (stale UID is not an active conflict)")
+			updatedVMI, err := controller.client.VirtualMachineInstance(vmi.Namespace).Get(context.Background(), vmi.Name, metav1.GetOptions{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updatedVMI.Status.MigrationState.SourceState).ToNot(BeNil())
+			Expect(updatedVMI.Status.MigrationState.SourceState.Node).To(Equal("node1"))
+		})
+
+		It("should block source state update when VMI has an active conflicting migration UID", func() {
+			// The VMI's MigrationUID belongs to a different, still-active (non-final) VMIM
+			// in the cache.  The update must be rejected to avoid cross-migration pollution.
+			By("Create a different active migration and add it to the informer cache")
+			activeMigration := &virtv1.VirtualMachineInstanceMigration{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "active-other-migration",
+					Namespace: k8sv1.NamespaceDefault,
+					UID:       "active-other-migration-uid",
+				},
+				Spec: virtv1.VirtualMachineInstanceMigrationSpec{
+					VMIName: vmi.Name,
+				},
+				Status: virtv1.VirtualMachineInstanceMigrationStatus{
+					// Phase is Scheduling — not final.
+					Phase: virtv1.MigrationScheduling,
+				},
+			}
+			err := controller.migrationInformer.GetStore().Add(activeMigration)
+			Expect(err).ToNot(HaveOccurred())
+
+			By("Set VMI MigrationUID to the active conflicting migration's UID")
+			vmi.Status.MigrationState = &virtv1.VirtualMachineInstanceMigrationState{
+				MigrationUID: activeMigration.UID,
+			}
+			vmi, err = controller.client.VirtualMachineInstance(vmi.Namespace).Update(context.Background(), vmi, metav1.UpdateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+			err = controller.vmiInformer.GetStore().Update(vmi)
+			Expect(err).ToNot(HaveOccurred())
+
+			By("Create request with source state")
+			remoteStatus := &virtv1.VirtualMachineInstanceStatus{
+				MigrationState: &virtv1.VirtualMachineInstanceMigrationState{
+					SourceState: &virtv1.VirtualMachineInstanceMigrationSourceState{
+						VirtualMachineInstanceCommonMigrationState: virtv1.VirtualMachineInstanceCommonMigrationState{
+							Node: "node1",
+						},
+					},
+				},
+			}
+			vmiStatusJson, err := json.Marshal(remoteStatus)
+			Expect(err).ToNot(HaveOccurred())
+			request := &syncv1.VMIStatusRequest{
+				MigrationID: testMigrationID,
+				VmiStatus: &syncv1.VMIStatus{
+					VmiStatusJson: vmiStatusJson,
+				},
+			}
+
+			By("Call SyncSourceMigrationStatus")
+			resp, err := controller.SyncSourceMigrationStatus(context.TODO(), request)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(resp.Message).To(Equal(successMessage))
+
+			By("Verify VMI was NOT updated (active conflicting migration blocks the update)")
 			updatedVMI, err := controller.client.VirtualMachineInstance(vmi.Namespace).Get(context.Background(), vmi.Name, metav1.GetOptions{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(updatedVMI.Status.MigrationState.SourceState).To(BeNil())
-			Expect(updatedVMI.Status.MigrationState.MigrationUID).To(Equal(types.UID(differentMigrationUID)))
+			Expect(updatedVMI.Status.MigrationState.MigrationUID).To(Equal(activeMigration.UID))
 		})
 
 		It("should sync MigrationTransport from source to target", func() {
@@ -719,11 +783,14 @@ var _ = Describe("VMI status synchronization controller", func() {
 			Expect(updatedVMI.Status.MigrationState.TargetState).To(BeNil())
 		})
 
-		It("should return success when target VMI migration UID doesn't match without updating VMI", func() {
-			By("Set up VMI with different migration UID")
-			differentMigrationUID := "different-migration-uid"
+		It("should proceed with target state update when VMI has a stale migration UID not present in cache", func() {
+			// DLM same-cluster scenario: the source VMI's MigrationUID was set by a
+			// previous run whose VMIM was already deleted.  Since the UID is not in
+			// the informer cache, isActiveMigrationUID returns false → update is allowed.
+			By("Set up VMI with a stale migration UID (no matching VMIM in cache)")
+			staleMigrationUID := "stale-migration-uid-not-in-cache"
 			vmi.Status.MigrationState = &virtv1.VirtualMachineInstanceMigrationState{
-				MigrationUID: types.UID(differentMigrationUID),
+				MigrationUID: types.UID(staleMigrationUID),
 			}
 			vmi, err := controller.client.VirtualMachineInstance(vmi.Namespace).Update(context.Background(), vmi, metav1.UpdateOptions{})
 			Expect(err).ToNot(HaveOccurred())
@@ -754,11 +821,72 @@ var _ = Describe("VMI status synchronization controller", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(resp.Message).To(Equal(successMessage))
 
-			By("Verify VMI was not updated (TargetState should still be nil)")
+			By("Verify VMI was updated despite stale UID mismatch (stale UID is not an active conflict)")
+			updatedVMI, err := controller.client.VirtualMachineInstance(vmi.Namespace).Get(context.Background(), vmi.Name, metav1.GetOptions{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updatedVMI.Status.MigrationState.TargetState).ToNot(BeNil())
+			Expect(updatedVMI.Status.MigrationState.TargetState.Node).To(Equal("node1"))
+		})
+
+		It("should block target state update when VMI has an active conflicting migration UID", func() {
+			// The source VMI's MigrationUID belongs to a different, still-active (non-final)
+			// VMIM in the cache.  The update must be rejected to avoid cross-migration pollution.
+			By("Create a different active migration and add it to the informer cache")
+			activeMigration := &virtv1.VirtualMachineInstanceMigration{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "active-other-migration",
+					Namespace: k8sv1.NamespaceDefault,
+					UID:       "active-other-migration-uid",
+				},
+				Spec: virtv1.VirtualMachineInstanceMigrationSpec{
+					VMIName: vmi.Name,
+				},
+				Status: virtv1.VirtualMachineInstanceMigrationStatus{
+					// Phase is Scheduling — not final.
+					Phase: virtv1.MigrationScheduling,
+				},
+			}
+			err := controller.migrationInformer.GetStore().Add(activeMigration)
+			Expect(err).ToNot(HaveOccurred())
+
+			By("Set source VMI MigrationUID to the active conflicting migration's UID")
+			vmi.Status.MigrationState = &virtv1.VirtualMachineInstanceMigrationState{
+				MigrationUID: activeMigration.UID,
+			}
+			vmi, err = controller.client.VirtualMachineInstance(vmi.Namespace).Update(context.Background(), vmi, metav1.UpdateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+			err = controller.vmiInformer.GetStore().Update(vmi)
+			Expect(err).ToNot(HaveOccurred())
+
+			By("Create request with target state")
+			remoteStatus := &virtv1.VirtualMachineInstanceStatus{
+				MigrationState: &virtv1.VirtualMachineInstanceMigrationState{
+					TargetState: &virtv1.VirtualMachineInstanceMigrationTargetState{
+						VirtualMachineInstanceCommonMigrationState: virtv1.VirtualMachineInstanceCommonMigrationState{
+							Node: "node1",
+						},
+					},
+				},
+			}
+			vmiStatusJson, err := json.Marshal(remoteStatus)
+			Expect(err).ToNot(HaveOccurred())
+			request := &syncv1.VMIStatusRequest{
+				MigrationID: testMigrationID,
+				VmiStatus: &syncv1.VMIStatus{
+					VmiStatusJson: vmiStatusJson,
+				},
+			}
+
+			By("Call SyncTargetMigrationStatus")
+			resp, err := controller.SyncTargetMigrationStatus(context.TODO(), request)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(resp.Message).To(Equal(successMessage))
+
+			By("Verify VMI was NOT updated (active conflicting migration blocks the update)")
 			updatedVMI, err := controller.client.VirtualMachineInstance(vmi.Namespace).Get(context.Background(), vmi.Name, metav1.GetOptions{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(updatedVMI.Status.MigrationState.TargetState).To(BeNil())
-			Expect(updatedVMI.Status.MigrationState.MigrationUID).To(Equal(types.UID(differentMigrationUID)))
+			Expect(updatedVMI.Status.MigrationState.MigrationUID).To(Equal(activeMigration.UID))
 		})
 	})
 
