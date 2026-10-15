@@ -1058,7 +1058,15 @@ func (c *Controller) createTargetPod(migration *virtv1.VirtualMachineInstanceMig
 	}
 
 	if migration.IsDecentralizedTarget() {
-		createDecentralizedMigrationPodAntiAffinity(templatePod, vmi)
+		// For same-cluster DLM the target pod must land on the same node as
+		// the source (the VM is moving between namespaces, not nodes).
+		// Only add the node anti-affinity for cross-cluster DLM where the
+		// source node name is meaningless in the target cluster's topology.
+		// We detect same-cluster by checking whether the source node name
+		// exists in the local node informer cache.
+		if !c.isLocalNode(vmi.Status.MigrationState.SourceState.Node) {
+			createDecentralizedMigrationPodAntiAffinity(templatePod, vmi)
+		}
 		selinuxContext = vmi.Status.MigrationState.SourceState.SelinuxContext
 	} else {
 		createMigrationPodAntiAffinityRule(templatePod, vmi)
@@ -1297,6 +1305,18 @@ func (c *Controller) getNodeSelectorsFromNodeName(nodeName string) (map[string]s
 		}
 	}
 	return res, nil
+}
+
+// isLocalNode returns true when nodeName is present in this controller's node
+// informer cache — i.e. the node belongs to the same cluster.  Used to
+// distinguish same-cluster DLM (different namespaces, same nodes) from
+// cross-cluster DLM (different physical clusters with different node sets).
+func (c *Controller) isLocalNode(nodeName string) bool {
+	if nodeName == "" {
+		return false
+	}
+	_, exists, err := c.nodeStore.GetByKey(nodeName)
+	return err == nil && exists
 }
 
 // updateTargetPodNetworkInfo generates the network-info annotation from the target pod's network-status
