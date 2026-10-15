@@ -633,11 +633,17 @@ func (v *VirtualMachineInstance) IsMigrationTargetNodeLabelSet() bool {
 
 // Assume that this only called when in decentralized live migration
 func (v *VirtualMachineInstance) IsMigrationSourceSynchronized() bool {
+	// NodeSelectors is intentionally not nil-checked here.
+	// On architectures that have no host-model CPU labels (e.g. ppc64le)
+	// getNodeSelectorsFromNodeName returns an empty map {}, not nil.
+	// Semantic equality treats nil and {} as equal, so the field may be
+	// omitted from the API server response even after it was written.
+	// The meaningful readiness signal is MigrationUID + Pod + Node being set;
+	// an absent NodeSelectors map simply means "no placement constraints".
 	return v.Status.MigrationState != nil && v.Status.MigrationState.SourceState != nil &&
 		v.Status.MigrationState.TargetState != nil &&
 		v.Status.MigrationState.SourceState.MigrationUID != "" &&
 		v.Status.MigrationState.SourceState.Pod != "" &&
-		v.Status.MigrationState.SourceState.NodeSelectors != nil &&
 		v.Status.MigrationState.SourceState.Node != ""
 }
 

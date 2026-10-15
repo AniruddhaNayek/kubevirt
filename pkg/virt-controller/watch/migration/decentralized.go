@@ -146,6 +146,13 @@ func (c *Controller) updateVMIMigrationSourceWithPodInfo(migration *v1.VirtualMa
 	if err != nil {
 		return err
 	}
+	// getNodeSelectorsFromNodeName returns {} on architectures without
+	// host-model CPU labels (e.g. ppc64le). Ensure the map is never nil
+	// so that JSON serialisation writes the field rather than omitting it;
+	// an absent field looks the same as nil to IsMigrationSourceSynchronized.
+	if nodeSelectors == nil {
+		nodeSelectors = make(map[string]string)
+	}
 	vmiCopy.Status.MigrationState.SourceState.NodeSelectors = nodeSelectors
 
 	if err := c.patchVMI(vmi, vmiCopy); err != nil {
